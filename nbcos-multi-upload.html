@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>NBCOS Multi-Upload Test</title>
+  <title>NBCOS Multi-Upload Test (With Download Chunks)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
@@ -31,8 +32,22 @@
     .chunk-info {
       font-size: 14px;
       color: #333;
-      margin: 5px 0 12px;
+      margin: 8px 0;
       padding-left: 10px;
+    }
+    .download-btn {
+      background-color: #0d2d5c;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 6px;
+      margin-left: 10px;
+    }
+    .download-btn:hover {
+      background-color: #09306d;
     }
     .error {
       color: red;
@@ -45,7 +60,7 @@
 </head>
 <body>
 
-  <h2>NBCOS Multiple Excel Upload</h2>
+  <h2>NBCOS Multiple Excel Upload (Split and Download)</h2>
 
   <input type="file" id="fileInput" multiple accept=".xlsx" />
   <div id="spinner">⏳ Processing files, please wait...</div>
@@ -90,10 +105,18 @@
 
           for (let i = 0; i < totalChunks; i++) {
             const chunk = rows.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-            const chunkPreview = JSON.stringify(chunk[0], null, 0).slice(0, 100);
+
             const chunkLine = document.createElement("div");
             chunkLine.className = "chunk-info";
-            chunkLine.textContent = `• Chunk ${i + 1}: ${chunk.length} rows | Preview: ${chunkPreview}`;
+            chunkLine.textContent = `• Chunk ${i + 1}: ${chunk.length} rows`;
+
+            // ✅ Create Download Button
+            const downloadBtn = document.createElement("button");
+            downloadBtn.className = "download-btn";
+            downloadBtn.textContent = "Download Chunk";
+            downloadBtn.onclick = () => downloadChunk(chunk, `${file.name.replace('.xlsx','')}_Chunk${i+1}.xlsx`);
+
+            chunkLine.appendChild(downloadBtn);
             div.appendChild(chunkLine);
           }
 
@@ -104,6 +127,14 @@
 
       spinner.style.display = "none";
     });
+
+    function downloadChunk(data, filename) {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+      XLSX.writeFile(wb, filename);
+    }
   </script>
 </body>
 </html>
