@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>NBCOS Multi-Upload Test (With Download Chunks)</title>
+  <title>Test-upload</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
@@ -14,54 +13,38 @@
     }
     h2 {
       color: #0d2d5c;
-      margin-bottom: 10px;
     }
     .file-box {
       background: white;
-      border-radius: 8px;
       padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
     #spinner {
       display: none;
       font-weight: bold;
       color: goldenrod;
-      margin: 10px 0;
     }
     .chunk-info {
       font-size: 14px;
-      color: #333;
-      margin: 8px 0;
-      padding-left: 10px;
+      margin-top: 5px;
     }
     .download-btn {
-      background-color: #0d2d5c;
+      margin-left: 10px;
+      padding: 4px 10px;
+      background: #0d2d5c;
       color: white;
       border: none;
-      border-radius: 5px;
-      padding: 6px 12px;
+      border-radius: 4px;
       font-size: 13px;
       cursor: pointer;
-      margin-top: 6px;
-      margin-left: 10px;
-    }
-    .download-btn:hover {
-      background-color: #09306d;
-    }
-    .error {
-      color: red;
-      font-weight: bold;
-    }
-    input[type="file"] {
-      padding: 8px;
     }
   </style>
 </head>
 <body>
 
-  <h2>NBCOS Multiple Excel Upload (Split and Download)</h2>
-
+  <h2>Test-upload</h2>
   <input type="file" id="fileInput" multiple accept=".xlsx" />
   <div id="spinner">⏳ Processing files, please wait...</div>
   <div id="output"></div>
@@ -82,59 +65,50 @@
           const data = new Uint8Array(evt.target.result);
           const wb = XLSX.read(data, { type: "array" });
           const sheet = wb.Sheets[wb.SheetNames[0]];
-
-          // Validate A1 column header
-          const headerA1 = sheet["A1"]?.v?.toString().trim();
-          if (headerA1 !== "LD_CIF_OS") {
-            const div = document.createElement("div");
-            div.className = "file-box error";
-            div.textContent = `❌ ${file.name} rejected: first column must be LD_CIF_OS (found: "${headerA1}")`;
-            output.appendChild(div);
+          const a1 = sheet["A1"]?.v?.toString().trim();
+          if (a1 !== "LD_CIF_OS") {
+            const box = document.createElement("div");
+            box.className = "file-box";
+            box.innerHTML = `<strong>${file.name}</strong><br><span style="color:red;">❌ First column must be LD_CIF_OS (found "${a1}")</span>`;
+            output.appendChild(box);
             return;
           }
 
           const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
           const totalChunks = Math.ceil(rows.length / CHUNK_SIZE);
 
-          const div = document.createElement("div");
-          div.className = "file-box";
-          div.innerHTML = `<strong>${file.name}</strong><br>
-            ✅ Validated (LD_CIF_OS)<br>
-            Total Rows: ${rows.length}<br>
-            Will split into <strong>${totalChunks}</strong> chunk(s):`;
+          const box = document.createElement("div");
+          box.className = "file-box";
+          box.innerHTML = `<strong>${file.name}</strong><br>✅ ${rows.length} rows → ${totalChunks} chunks`;
 
           for (let i = 0; i < totalChunks; i++) {
             const chunk = rows.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+            const preview = JSON.stringify(chunk[0]).slice(0, 100);
+            const line = document.createElement("div");
+            line.className = "chunk-info";
+            line.innerHTML = `• Chunk ${i + 1}: ${chunk.length} rows | Preview: ${preview}`;
 
-            const chunkLine = document.createElement("div");
-            chunkLine.className = "chunk-info";
-            chunkLine.textContent = `• Chunk ${i + 1}: ${chunk.length} rows`;
+            const btn = document.createElement("button");
+            btn.className = "download-btn";
+            btn.textContent = "Download";
+            btn.onclick = () => {
+              const wb = XLSX.utils.book_new();
+              const ws = XLSX.utils.json_to_sheet(chunk);
+              XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+              XLSX.writeFile(wb, `${file.name.replace('.xlsx','')}_Chunk${i+1}.xlsx`);
+            };
 
-            // ✅ Create Download Button
-            const downloadBtn = document.createElement("button");
-            downloadBtn.className = "download-btn";
-            downloadBtn.textContent = "Download Chunk";
-            downloadBtn.onclick = () => downloadChunk(chunk, `${file.name.replace('.xlsx','')}_Chunk${i+1}.xlsx`);
-
-            chunkLine.appendChild(downloadBtn);
-            div.appendChild(chunkLine);
+            line.appendChild(btn);
+            box.appendChild(line);
           }
 
-          output.appendChild(div);
+          output.appendChild(box);
         };
         reader.readAsArrayBuffer(file);
       }
 
       spinner.style.display = "none";
     });
-
-    function downloadChunk(data, filename) {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(data);
-      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-
-      XLSX.writeFile(wb, filename);
-    }
   </script>
 </body>
 </html>
