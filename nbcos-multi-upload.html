@@ -1,114 +1,137 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Test-upload</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>Excel File Processor</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f0f4f8;
-      padding: 20px;
+      margin: 40px;
     }
-    h2 {
-      color: #0d2d5c;
-    }
-    .file-box {
-      background: white;
-      padding: 16px;
-      margin: 20px 0;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    #fileInput {
+      margin-bottom: 20px;
     }
     #spinner {
       display: none;
+      margin: 20px 0;
       font-weight: bold;
-      color: goldenrod;
+      color: #007BFF;
     }
-    .chunk-info {
-      font-size: 14px;
-      margin-top: 5px;
+    #results {
+      margin-top: 20px;
     }
-    .download-btn {
-      margin-left: 10px;
-      padding: 4px 10px;
-      background: #0d2d5c;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 13px;
-      cursor: pointer;
+    .error {
+      color: red;
+    }
+    .success {
+      color: green;
     }
   </style>
 </head>
 <body>
 
-  <h2>Test-upload</h2>
-  <input type="file" id="fileInput" multiple accept=".xlsx" />
-  <div id="spinner">⏳ Processing files, please wait...</div>
-  <div id="output"></div>
+  <h1>Excel File Processor</h1>
+  <input type="file" id="fileInput" multiple accept=".xlsx, .xls" />
+  <div id="spinner">Processing files, please wait...</div>
+  <div id="results"></div>
 
   <script>
+    const fileInput = document.getElementById('fileInput');
+    const spinner = document.getElementById('spinner');
+    const results = document.getElementById('results');
     const CHUNK_SIZE = 3000;
 
-    document.getElementById("fileInput").addEventListener("change", async (e) => {
-      const files = Array.from(e.target.files);
-      const output = document.getElementById("output");
-      const spinner = document.getElementById("spinner");
-      output.innerHTML = "";
-      spinner.style.display = "block";
+    fileInput.addEventListener('change', handleFiles);
 
-      for (const file of files) {
+    function handleFiles(event) {
+      const files = event.target.files;
+      if (!files.length) return;
+
+      results.innerHTML = '';
+      spinner.style.display = 'block';
+
+      const filePromises = Array.from(files).map(file => processFile(file));
+
+      Promise.all(filePromises)
+        .then(() => {
+          spinner.style.display = 'none';
+        })
+        .catch(error => {
+          spinner.style.display = 'none';
+          results.innerHTML += `<div class="error">Error: ${error.message}</div>`;
+        });
+    }
+
+    function processFile(file) {
+      return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (evt) => {
-          const data = new Uint8Array(evt.target.result);
-          const wb = XLSX.read(data, { type: "array" });
-          const sheet = wb.Sheets[wb.SheetNames[0]];
-          const a1 = sheet["A1"]?.v?.toString().trim();
-          if (a1 !== "LD_CIF_OS") {
-            const box = document.createElement("div");
-            box.className = "file-box";
-            box.innerHTML = `<strong>${file.name}</strong><br><span style="color:red;">❌ First column must be LD_CIF_OS (found "${a1}")</span>`;
-            output.appendChild(box);
-            return;
+
+        reader.onload = function(e) {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (!jsonData.length) {
+              results.innerHTML += `<div class="error">File "${file.name}" is empty.</div>`;
+              return resolve();
+            }
+
+            const headers = jsonData[0];
+            if (headers[0] !== 'LD_CIF_OS') {
+              results.innerHTML += `<div class="error">File "${file.name}" does not have 'LD_CIF_OS' as the first column.</div>`;
+              return resolve();
+            }
+
+            const dataRows = jsonData.slice(1);
+            const totalRows = dataRows.length;
+
+            if (totalRows <= CHUNK_SIZE) {
+              results.innerHTML += `<div class="success">File "${file.name}" processed with ${totalRows} rows.</div>`;
+            } else {
+              const numChunks = Math.ceil(totalRows / CHUNK_SIZE);
+              for (let i = 0; i < numChunks; i++) {
+                const chunkData = dataRows.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+                const chunkArray = [headers, ...chunkData];
+                const worksheetChunk = XLSX.utils.aoa_to_sheet(chunkArray);
+                const workbookChunk = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbookChunk, worksheetChunk, 'Sheet1');
+                const chunkBlob = XLSX.write(workbookChunk, { bookType: 'xlsx', type: 'blob' });
+                const chunkFileName = `${file.name.replace(/\.xlsx?$/, '')}_part${i + 1}.xlsx`;
+                downloadBlob(chunkBlob, chunkFileName);
+              }
+              results.innerHTML += `<div class="success">File "${file.name}" split into ${numChunks} files.</div>`;
+            }
+
+            resolve();
+          } catch (err) {
+            reject(err);
           }
-
-          const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-          const totalChunks = Math.ceil(rows.length / CHUNK_SIZE);
-
-          const box = document.createElement("div");
-          box.className = "file-box";
-          box.innerHTML = `<strong>${file.name}</strong><br>✅ ${rows.length} rows → ${totalChunks} chunks`;
-
-          for (let i = 0; i < totalChunks; i++) {
-            const chunk = rows.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-            const preview = JSON.stringify(chunk[0]).slice(0, 100);
-            const line = document.createElement("div");
-            line.className = "chunk-info";
-            line.innerHTML = `• Chunk ${i + 1}: ${chunk.length} rows | Preview: ${preview}`;
-
-            const btn = document.createElement("button");
-            btn.className = "download-btn";
-            btn.textContent = "Download";
-            btn.onclick = () => {
-              const wb = XLSX.utils.book_new();
-              const ws = XLSX.utils.json_to_sheet(chunk);
-              XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-              XLSX.writeFile(wb, `${file.name.replace('.xlsx','')}_Chunk${i+1}.xlsx`);
-            };
-
-            line.appendChild(btn);
-            box.appendChild(line);
-          }
-
-          output.appendChild(box);
         };
-        reader.readAsArrayBuffer(file);
-      }
 
-      spinner.style.display = "none";
-    });
+        reader.onerror = function() {
+          reject(new Error(`Failed to read file "${file.name}".`));
+        };
+
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function downloadBlob(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   </script>
+
 </body>
 </html>
