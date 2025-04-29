@@ -1,19 +1,14 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Test Upload NBCOS</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Split Upload</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f1f4f8;
-      margin: 0;
+      background: #f8f9fa;
       padding: 20px;
       text-align: center;
     }
@@ -22,49 +17,41 @@
     }
     #spinner {
       display: none;
-      margin-top: 20px;
       font-size: 16px;
+      margin-top: 20px;
       color: orange;
     }
     #result {
       margin-top: 20px;
-      font-size: 14px;
+      font-size: 16px;
       color: green;
       white-space: pre-wrap;
     }
-    input[type="file"], button {
+    input[type="file"] {
       margin-top: 20px;
-      font-size: 16px;
     }
   </style>
 </head>
 
 <body>
 
-<h1>Test Upload NBCOS</h1>
+<h1>Simple Upload + Split</h1>
 
-<input type="file" id="fileInput" accept=".xlsx" />
-<br>
-<button id="downloadBtn" style="display:none;">📥 Download ZIP</button>
-
-<div id="spinner">Checking and Splitting... Please wait...</div>
+<input type="file" id="fileInput" accept=".xlsx">
+<div id="spinner">Checking and splitting, please wait...</div>
 <div id="result"></div>
 
 <script>
-let chunks = [];
-
 const fileInput = document.getElementById('fileInput');
 const spinner = document.getElementById('spinner');
 const result = document.getElementById('result');
-const downloadBtn = document.getElementById('downloadBtn');
 
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files[0];
   if (!file) return;
 
-  result.textContent = '';
-  downloadBtn.style.display = 'none';
   spinner.style.display = 'block';
+  result.textContent = '';
 
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -72,58 +59,30 @@ fileInput.addEventListener('change', async () => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-    const firstHeader = (rows[0] && rows[0][0]) ? rows[0][0].toString().trim() : "";
-    if (firstHeader !== "LD_CIF_OS") {
-      spinner.style.display = 'none';
-      result.innerHTML = "❌ Error: First column must be 'LD_CIF_OS'";
-      return;
-    }
-
     const header = rows[0];
     const dataRows = rows.slice(1);
-    const chunkSize = 3000;
-    chunks = [];
+
+    const chunkSize = 2000;
+    const chunks = [];
 
     for (let i = 0; i < dataRows.length; i += chunkSize) {
       const chunk = [header, ...dataRows.slice(i, i + chunkSize)];
       chunks.push(chunk);
     }
 
-    result.innerHTML = `
-    ✅ File valid<br>
-    Total Data Rows: ${dataRows.length}<br>
-    Number of Parts: ${chunks.length}<br><br>
-    `;
+    result.innerHTML = `✅ File uploaded.<br>`;
+    result.innerHTML += `Total Rows: ${dataRows.length}<br>`;
+    result.innerHTML += `Split into ${chunks.length} parts:<br><br>`;
 
     chunks.forEach((chunk, index) => {
       result.innerHTML += `📄 Part ${index + 1}: ${chunk.length - 1} rows<br>`;
     });
 
-    downloadBtn.style.display = 'inline-block';
-
-  } catch (error) {
-    result.innerHTML = "❌ Error: " + error.message;
+  } catch (err) {
+    result.textContent = '❌ Error: ' + err.message;
   }
 
   spinner.style.display = 'none';
-});
-
-downloadBtn.addEventListener('click', async () => {
-  if (!chunks.length) return;
-
-  const zip = new JSZip();
-
-  chunks.forEach((chunk, index) => {
-    const ws = XLSX.utils.aoa_to_sheet(chunk);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-
-    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    zip.file(`NBCOS-Part${index + 1}.xlsx`, excelBuffer);
-  });
-
-  const blob = await zip.generateAsync({ type: "blob" });
-  saveAs(blob, "NBCOS_Split_Files.zip");
 });
 </script>
 
