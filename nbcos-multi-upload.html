@@ -6,6 +6,9 @@
   <title>Test Upload NBCOS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -29,7 +32,7 @@
       color: green;
       white-space: pre-wrap;
     }
-    input[type="file"] {
+    input[type="file"], button {
       margin-top: 20px;
       font-size: 16px;
     }
@@ -40,70 +43,88 @@
 
 <h1>Test Upload NBCOS</h1>
 
-<!-- Upload box -->
 <input type="file" id="fileInput" accept=".xlsx" />
+<br>
+<button id="downloadBtn" style="display:none;">📥 Download ZIP</button>
 
-<!-- Spinner -->
 <div id="spinner">Checking and Splitting... Please wait...</div>
-
-<!-- Result area -->
 <div id="result"></div>
 
 <script>
-  const fileInput = document.getElementById('fileInput');
-  const spinner = document.getElementById('spinner');
-  const result = document.getElementById('result');
+let chunks = [];
 
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files[0];
-    if (!file) return;
+const fileInput = document.getElementById('fileInput');
+const spinner = document.getElementById('spinner');
+const result = document.getElementById('result');
+const downloadBtn = document.getElementById('downloadBtn');
 
-    result.textContent = '';
-    spinner.style.display = 'block'; // Show spinner
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
 
-    try {
-      // Read file
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+  result.textContent = '';
+  downloadBtn.style.display = 'none';
+  spinner.style.display = 'block';
 
-      // Check first column header
-      const firstHeader = (rows[0] && rows[0][0]) ? rows[0][0].toString().trim() : "";
-      if (firstHeader !== "LD_CIF_OS") {
-        spinner.style.display = 'none';
-        result.innerHTML = "❌ Error: First column must be 'LD_CIF_OS'";
-        return;
-      }
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-      // Split rows into chunks of 3000
-      const header = rows[0];
-      const dataRows = rows.slice(1);
-      const chunkSize = 3000;
-      const chunks = [];
-
-      for (let i = 0; i < dataRows.length; i += chunkSize) {
-        const chunk = [header, ...dataRows.slice(i, i + chunkSize)];
-        chunks.push(chunk);
-      }
-
-      // Show result (not auto download)
-      result.innerHTML = `
-      ✅ File valid<br>
-      Total Data Rows: ${dataRows.length}<br>
-      Number of Parts: ${chunks.length}<br><br>
-      `;
-
-      chunks.forEach((chunk, index) => {
-        result.innerHTML += `📄 Part ${index + 1}: ${chunk.length - 1} rows<br>`;
-      });
-
-    } catch (error) {
-      result.innerHTML = "❌ Error: " + error.message;
+    const firstHeader = (rows[0] && rows[0][0]) ? rows[0][0].toString().trim() : "";
+    if (firstHeader !== "LD_CIF_OS") {
+      spinner.style.display = 'none';
+      result.innerHTML = "❌ Error: First column must be 'LD_CIF_OS'";
+      return;
     }
 
-    spinner.style.display = 'none'; // Hide spinner
+    const header = rows[0];
+    const dataRows = rows.slice(1);
+    const chunkSize = 3000;
+    chunks = [];
+
+    for (let i = 0; i < dataRows.length; i += chunkSize) {
+      const chunk = [header, ...dataRows.slice(i, i + chunkSize)];
+      chunks.push(chunk);
+    }
+
+    result.innerHTML = `
+    ✅ File valid<br>
+    Total Data Rows: ${dataRows.length}<br>
+    Number of Parts: ${chunks.length}<br><br>
+    `;
+
+    chunks.forEach((chunk, index) => {
+      result.innerHTML += `📄 Part ${index + 1}: ${chunk.length - 1} rows<br>`;
+    });
+
+    downloadBtn.style.display = 'inline-block';
+
+  } catch (error) {
+    result.innerHTML = "❌ Error: " + error.message;
+  }
+
+  spinner.style.display = 'none';
+});
+
+downloadBtn.addEventListener('click', async () => {
+  if (!chunks.length) return;
+
+  const zip = new JSZip();
+
+  chunks.forEach((chunk, index) => {
+    const ws = XLSX.utils.aoa_to_sheet(chunk);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    zip.file(`NBCOS-Part${index + 1}.xlsx`, excelBuffer);
   });
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  saveAs(blob, "NBCOS_Split_Files.zip");
+});
 </script>
 
 </body>
