@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,85 +9,89 @@
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
+      background: #f9f9f9;
+      color: #333;
     }
     h1 {
-      font-size: 24px;
       color: #0d2d5c;
+      font-size: 20px;
+      margin-bottom: 10px;
     }
     #spinner {
       display: none;
-      margin: 10px 0;
-      font-weight: bold;
       color: orange;
+      margin-top: 10px;
     }
-    #results {
-      margin-top: 20px;
+    #result {
+      margin-top: 15px;
       white-space: pre-wrap;
     }
-    .success { color: green; }
-    .error { color: red; }
+    input[type="file"] {
+      padding: 8px;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
 
 <h1>Test-upload</h1>
 <input type="file" id="fileInput" accept=".xlsx" />
-<div id="spinner">Checking and splitting... Please wait...</div>
-<div id="results"></div>
+<div id="spinner">Processing... Please wait...</div>
+<div id="result"></div>
 
 <script>
-  const fileInput = document.getElementById('fileInput');
-  const spinner = document.getElementById('spinner');
-  const results = document.getElementById('results');
+  const fileInput = document.getElementById("fileInput");
+  const spinner = document.getElementById("spinner");
+  const result = document.getElementById("result");
 
-  fileInput.addEventListener('change', async () => {
+  fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
-    results.textContent = '';
     if (!file) return;
 
-    spinner.style.display = 'block';
+    result.textContent = "";
+    spinner.style.display = "block";
 
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      const wb = XLSX.read(data, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-      if (!json.length || json[0][0] !== 'LD_CIF_OS') {
-        results.innerHTML = `<div class="error">❌ First column must be LD_CIF_OS</div>`;
-        spinner.style.display = 'none';
+      if (!rows.length || rows[0][0] !== "LD_CIF_OS") {
+        spinner.style.display = "none";
+        result.innerHTML = "❌ Invalid first column. Expected 'LD_CIF_OS'";
         return;
       }
 
-      const header = json[0];
-      const rows = json.slice(1);
+      const header = rows[0];
+      const dataRows = rows.slice(1);
       const chunkSize = 3000;
+      const chunks = [];
 
-      if (rows.length <= chunkSize) {
-        results.innerHTML = `<div class="success">✅ File OK. Total rows: ${rows.length}</div>`;
-      } else {
-        const chunks = [];
-        for (let i = 0; i < rows.length; i += chunkSize) {
-          chunks.push([header, ...rows.slice(i, i + chunkSize)]);
-        }
-
-        results.innerHTML = `<div class="success">✅ File split into ${chunks.length} chunks (${rows.length} rows)</div>`;
-        chunks.forEach((chunk, index) => {
-          const ws = XLSX.utils.aoa_to_sheet(chunk);
-          const wb = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-          const blob = XLSX.write(wb, { type: 'blob', bookType: 'xlsx' });
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = `chunk_${index + 1}.xlsx`;
-          a.click();
-        });
+      for (let i = 0; i < dataRows.length; i += chunkSize) {
+        const chunk = [header, ...dataRows.slice(i, i + chunkSize)];
+        chunks.push(chunk);
       }
+
+      result.innerHTML = `✅ Valid file. Total rows: ${dataRows.length}, Chunks: ${chunks.length}<br><br>Starting downloads...`;
+
+      // Auto download each chunk
+      chunks.forEach((chunk, index) => {
+        const newSheet = XLSX.utils.aoa_to_sheet(chunk);
+        const newWB = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWB, newSheet, "Sheet1");
+        const blob = XLSX.write(newWB, { type: "blob", bookType: "xlsx" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `NBCOS_chunk_${index + 1}.xlsx`;
+        link.click();
+      });
+
     } catch (err) {
-      results.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`;
+      result.textContent = "❌ Error: " + err.message;
     }
 
-    spinner.style.display = 'none';
+    spinner.style.display = "none";
   });
 </script>
 
