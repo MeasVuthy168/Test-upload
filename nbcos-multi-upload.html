@@ -1,14 +1,19 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Simple Split Upload</title>
+  <title>Simple Upload + Split</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Import correct XLSX.js from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #f8f9fa;
+      margin: 0;
       padding: 20px;
       text-align: center;
     }
@@ -29,61 +34,66 @@
     }
     input[type="file"] {
       margin-top: 20px;
+      padding: 10px;
     }
   </style>
 </head>
 
 <body>
 
-<h1>Simple Upload + Split</h1>
+<h1>Simple Upload and Split</h1>
 
-<input type="file" id="fileInput" accept=".xlsx">
-<div id="spinner">Checking and splitting, please wait...</div>
+<!-- Upload input -->
+<input type="file" id="fileInput" accept=".xlsx" />
+
+<!-- Spinner while checking -->
+<div id="spinner">Checking and splitting... Please wait...</div>
+
+<!-- Result after done -->
 <div id="result"></div>
 
 <script>
-const fileInput = document.getElementById('fileInput');
-const spinner = document.getElementById('spinner');
-const result = document.getElementById('result');
+  const fileInput = document.getElementById('fileInput');
+  const spinner = document.getElementById('spinner');
+  const result = document.getElementById('result');
 
-fileInput.addEventListener('change', async () => {
-  const file = fileInput.files[0];
-  if (!file) return;
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
 
-  spinner.style.display = 'block';
-  result.textContent = '';
+    spinner.style.display = 'block';
+    result.textContent = '';
 
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-    const header = rows[0];
-    const dataRows = rows.slice(1);
+      const header = rows[0];
+      const dataRows = rows.slice(1);
+      const chunkSize = 2000;
+      const chunks = [];
 
-    const chunkSize = 2000;
-    const chunks = [];
+      for (let i = 0; i < dataRows.length; i += chunkSize) {
+        const chunk = [header, ...dataRows.slice(i, i + chunkSize)];
+        chunks.push(chunk);
+      }
 
-    for (let i = 0; i < dataRows.length; i += chunkSize) {
-      const chunk = [header, ...dataRows.slice(i, i + chunkSize)];
-      chunks.push(chunk);
+      result.innerHTML = `✅ Upload Success<br>`;
+      result.innerHTML += `Total Rows: ${dataRows.length}<br>`;
+      result.innerHTML += `Split into ${chunks.length} parts:<br><br>`;
+
+      chunks.forEach((chunk, index) => {
+        result.innerHTML += `📄 Part ${index + 1}: ${chunk.length - 1} rows<br>`;
+      });
+
+    } catch (err) {
+      result.innerHTML = '❌ Error: ' + err.message;
     }
 
-    result.innerHTML = `✅ File uploaded.<br>`;
-    result.innerHTML += `Total Rows: ${dataRows.length}<br>`;
-    result.innerHTML += `Split into ${chunks.length} parts:<br><br>`;
-
-    chunks.forEach((chunk, index) => {
-      result.innerHTML += `📄 Part ${index + 1}: ${chunk.length - 1} rows<br>`;
-    });
-
-  } catch (err) {
-    result.textContent = '❌ Error: ' + err.message;
-  }
-
-  spinner.style.display = 'none';
-});
+    spinner.style.display = 'none';
+  });
 </script>
 
 </body>
