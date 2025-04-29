@@ -9,7 +9,7 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #f1f4f8;
+      background: #f1f4f8;
       margin: 0;
       padding: 20px;
       text-align: center;
@@ -39,8 +39,14 @@
 <body>
 
 <h1>Test Upload NBCOS</h1>
+
+<!-- Upload box -->
 <input type="file" id="fileInput" accept=".xlsx" />
+
+<!-- Spinner -->
 <div id="spinner">Checking and Splitting... Please wait...</div>
+
+<!-- Result area -->
 <div id="result"></div>
 
 <script>
@@ -53,20 +59,24 @@
     if (!file) return;
 
     result.textContent = '';
-    spinner.style.display = 'block';
+    spinner.style.display = 'block'; // Show spinner
 
     try {
+      // Read file
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-      if (!rows.length || rows[0][0] !== "LD_CIF_OS") {
+      // Check first column header
+      const firstHeader = (rows[0] && rows[0][0]) ? rows[0][0].toString().trim() : "";
+      if (firstHeader !== "LD_CIF_OS") {
         spinner.style.display = 'none';
         result.innerHTML = "❌ Error: First column must be 'LD_CIF_OS'";
         return;
       }
 
+      // Split rows into chunks of 3000
       const header = rows[0];
       const dataRows = rows.slice(1);
       const chunkSize = 3000;
@@ -77,26 +87,22 @@
         chunks.push(chunk);
       }
 
-      result.innerHTML = `✅ File valid. Total Rows: ${dataRows.length}<br>Split into ${chunks.length} files.`;
+      // Show result (not auto download)
+      result.innerHTML = `
+      ✅ File valid<br>
+      Total Data Rows: ${dataRows.length}<br>
+      Number of Parts: ${chunks.length}<br><br>
+      `;
 
-      // Auto download each chunk
       chunks.forEach((chunk, index) => {
-        const newSheet = XLSX.utils.aoa_to_sheet(chunk);
-        const newWorkbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Sheet1");
-        const blob = XLSX.write(newWorkbook, { type: 'blob', bookType: 'xlsx' });
-
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `NBCOS_Part_${index + 1}.xlsx`;
-        link.click();
+        result.innerHTML += `📄 Part ${index + 1}: ${chunk.length - 1} rows<br>`;
       });
 
     } catch (error) {
-      result.textContent = "❌ Error: " + error.message;
+      result.innerHTML = "❌ Error: " + error.message;
     }
 
-    spinner.style.display = 'none';
+    spinner.style.display = 'none'; // Hide spinner
   });
 </script>
 
