@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NBCOS Multi-Upload Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f4f8;
+      padding: 20px;
+    }
+    h2 {
+      color: #0d2d5c;
+      margin-bottom: 10px;
+    }
+    .file-box {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    #spinner {
+      display: none;
+      font-weight: bold;
+      color: goldenrod;
+      margin: 10px 0;
+    }
+    .chunk-info {
+      font-size: 14px;
+      color: #333;
+      margin: 5px 0 12px;
+      padding-left: 10px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+    input[type="file"] {
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>NBCOS Multiple Excel Upload</h2>
+
+  <input type="file" id="fileInput" multiple accept=".xlsx" />
+  <div id="spinner">⏳ Processing files, please wait...</div>
+  <div id="output"></div>
+
+  <script>
+    const CHUNK_SIZE = 3000;
+
+    document.getElementById("fileInput").addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files);
+      const output = document.getElementById("output");
+      const spinner = document.getElementById("spinner");
+      output.innerHTML = "";
+      spinner.style.display = "block";
+
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const data = new Uint8Array(evt.target.result);
+          const wb = XLSX.read(data, { type: "array" });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+
+          // Validate A1 column header
+          const headerA1 = sheet["A1"]?.v?.toString().trim();
+          if (headerA1 !== "LD_CIF_OS") {
+            const div = document.createElement("div");
+            div.className = "file-box error";
+            div.textContent = `❌ ${file.name} rejected: first column must be LD_CIF_OS (found: "${headerA1}")`;
+            output.appendChild(div);
+            return;
+          }
+
+          const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          const totalChunks = Math.ceil(rows.length / CHUNK_SIZE);
+
+          const div = document.createElement("div");
+          div.className = "file-box";
+          div.innerHTML = `<strong>${file.name}</strong><br>
+            ✅ Validated (LD_CIF_OS)<br>
+            Total Rows: ${rows.length}<br>
+            Will split into <strong>${totalChunks}</strong> chunk(s):`;
+
+          for (let i = 0; i < totalChunks; i++) {
+            const chunk = rows.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+            const chunkPreview = JSON.stringify(chunk[0], null, 0).slice(0, 100);
+            const chunkLine = document.createElement("div");
+            chunkLine.className = "chunk-info";
+            chunkLine.textContent = `• Chunk ${i + 1}: ${chunk.length} rows | Preview: ${chunkPreview}`;
+            div.appendChild(chunkLine);
+          }
+
+          output.appendChild(div);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      spinner.style.display = "none";
+    });
+  </script>
+</body>
+</html>
