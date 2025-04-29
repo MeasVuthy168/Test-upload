@@ -3,63 +3,67 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Test-upload</title>
+  <title>Test Upload NBCOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background-color: #f1f4f8;
+      margin: 0;
       padding: 20px;
-      background: #f9f9f9;
-      color: #333;
+      text-align: center;
     }
     h1 {
       color: #0d2d5c;
-      font-size: 20px;
-      margin-bottom: 10px;
     }
     #spinner {
       display: none;
+      margin-top: 20px;
+      font-size: 16px;
       color: orange;
-      margin-top: 10px;
     }
     #result {
-      margin-top: 15px;
+      margin-top: 20px;
+      font-size: 14px;
+      color: green;
       white-space: pre-wrap;
     }
     input[type="file"] {
-      padding: 8px;
-      margin-top: 8px;
+      margin-top: 20px;
+      font-size: 16px;
     }
   </style>
 </head>
+
 <body>
 
-<h1>Test-upload</h1>
+<h1>Test Upload NBCOS</h1>
 <input type="file" id="fileInput" accept=".xlsx" />
-<div id="spinner">Processing... Please wait...</div>
+<div id="spinner">Checking and Splitting... Please wait...</div>
 <div id="result"></div>
 
 <script>
-  const fileInput = document.getElementById("fileInput");
-  const spinner = document.getElementById("spinner");
-  const result = document.getElementById("result");
+  const fileInput = document.getElementById('fileInput');
+  const spinner = document.getElementById('spinner');
+  const result = document.getElementById('result');
 
-  fileInput.addEventListener("change", async () => {
+  fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
 
-    result.textContent = "";
-    spinner.style.display = "block";
+    result.textContent = '';
+    spinner.style.display = 'block';
 
     try {
-      const data = await file.arrayBuffer();
-      const wb = XLSX.read(data, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
       if (!rows.length || rows[0][0] !== "LD_CIF_OS") {
-        spinner.style.display = "none";
-        result.innerHTML = "❌ Invalid first column. Expected 'LD_CIF_OS'";
+        spinner.style.display = 'none';
+        result.innerHTML = "❌ Error: First column must be 'LD_CIF_OS'";
         return;
       }
 
@@ -73,25 +77,26 @@
         chunks.push(chunk);
       }
 
-      result.innerHTML = `✅ Valid file. Total rows: ${dataRows.length}, Chunks: ${chunks.length}<br><br>Starting downloads...`;
+      result.innerHTML = `✅ File valid. Total Rows: ${dataRows.length}<br>Split into ${chunks.length} files.`;
 
       // Auto download each chunk
       chunks.forEach((chunk, index) => {
         const newSheet = XLSX.utils.aoa_to_sheet(chunk);
-        const newWB = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(newWB, newSheet, "Sheet1");
-        const blob = XLSX.write(newWB, { type: "blob", bookType: "xlsx" });
-        const link = document.createElement("a");
+        const newWorkbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Sheet1");
+        const blob = XLSX.write(newWorkbook, { type: 'blob', bookType: 'xlsx' });
+
+        const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `NBCOS_chunk_${index + 1}.xlsx`;
+        link.download = `NBCOS_Part_${index + 1}.xlsx`;
         link.click();
       });
 
-    } catch (err) {
-      result.textContent = "❌ Error: " + err.message;
+    } catch (error) {
+      result.textContent = "❌ Error: " + error.message;
     }
 
-    spinner.style.display = "none";
+    spinner.style.display = 'none';
   });
 </script>
 
